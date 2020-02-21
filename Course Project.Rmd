@@ -1,0 +1,152 @@
+---
+title: "Practical Machine Learning - Course Assignment"
+author: "Rick M"
+date: "2/21/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Executive Summary
+
+
+The aim of the project is to predict how well an exercise (in our project specifically is barbell lifts) is done according to a set of variables that have been derived using sensors applied on the body.
+
+The training data for this project are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The objective is to correctly predict the variable classe of the Test set. This variable indicates how well the exercise is performed. The valua A indicates that the exercise was well performed while the other letters (from B to E) respectively indicate that common mistakes has been done during the execution of the weightlifting.
+
+First the datasets are loaded and only useful variables are considered. Then two different machine learning algorithms are applied to a subset of the training set and then tested to estimate the accuracy. Finally, the best model found is determined and is applied to the test set to predict the type of performance in doing the weightlifting of 20 instances.
+
+## Data Preparation
+
+First, load the packages that are needed to process and read the data for the training data and perform cleaning tasks. 
+
+```{r}
+library(caret)
+library(randomForest)
+library(rpart)
+library(curl)
+library(lattice)
+library(ggplot2)
+library(rattle)
+library(e1071)
+```
+
+```{r}
+URL<- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+train = read.csv(file=URL, na.strings=c("NA","#DIV/0!", ""))
+train <- subset(train, select=-c(1:6))
+train2<-train[,colSums(is.na(train)) == 0] 
+classe <- train2$classe
+train2 <- train2[,sapply(train2,is.numeric)] 
+train2$classe <- classe; rm(classe) 
+dim(train2)
+```
+
+```{r}
+URL2<- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+test = read.csv(file=URL2, na.strings=c("NA","#DIV/0!", ""))
+test <- subset(test, select=-c(1:6)) 
+test2 <-test[,colSums(is.na(test)) == 0] 
+test2 <- test2[,sapply(test2,is.numeric)] 
+dim(test2)
+```
+
+Then Identify set column name differences as it will be important in the assesment stage (predcition with test set)
+
+```{r}
+trainCol <- names(train2)
+testCol <- names(test2)
+setdiff(trainCol, testCol)
+```
+
+```{r}
+setdiff(testCol, trainCol)
+```
+
+## Cross-Validation
+
+Next use the caret package to divide the trainig set in 70% to sub-training set and 20% to a sub-testing set.
+
+```{r}
+set.seed(221)
+samples <- createDataPartition(y=train2$classe, p=0.7, list=FALSE)
+sTrain <- train2[samples, ] 
+sTest <- train2[-samples, ]
+plot(sTrain$classe,  main="classe in sub-Train data set", xlab="classe", ylab="Frequency")
+```
+
+## Modeling 
+
+Two models are ran and compared, selecting the ‘classe’ variable as the outcome, this variables has 5 levels (sitting-down, standing-up, standing, walking, and sitting) collected on 8 hours of activities of 4 healthy subjects.
+
+### First Model: Decision tree model
+
+```{r}
+set.seed(221)
+modelTree <- rpart(classe ~ ., data=sTrain, method="class")
+predicTree <- predict(modelTree, sTest, type = "class")
+```
+
+```{r}
+fancyRpartPlot(modelTree,cex=0.4)
+```
+
+Next, test the results on the sub-testing data set for this first model:
+
+```{r}
+confusionMatrix(predicTree, sTest$classe)
+```
+
+### Second Model: Random Forest model
+
+```{r}
+set.seed(221)
+modelForest <- randomForest(classe ~. , data=sTrain, method="class")
+predicForest <- predict(modelForest, sTest, type = "class")
+```
+
+Next, test the results on the sub-testing data set for the second model
+
+```{r}
+confusionMatrix(predicForest, sTest$classe)
+```
+
+```{r}
+VarImport <- varImp(modelForest)
+varImpPlot(modelForest,n.var = 10)
+```
+
+## Model Selection
+
+Based in the results, the Random Forest model due to it being a better predictor to the classe variable. Tha Accuracy in Random Forest Model was 0.9978 versus 0.7455 in the Decision Tree Model.
+
+## Submission (Prediction)
+
+Finally, predict 20 values in the testing data set using the Random Forest Model to predict ‘Class’ for each ‘problem_id’
+
+```{r}
+predictF <-predict(modelForest, type="class", newdata = test2[,-which(names(test) %in% "problem_id")])
+t(data.frame(problem_id = test2$problem_id, prediction = predictF))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
